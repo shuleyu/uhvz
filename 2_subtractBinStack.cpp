@@ -274,7 +274,7 @@ cout << "Data corrupted: " << modelType << " " << modelEQ <<  " " << modelInfo.G
 
         for (size_t j=0; j<binPairnames[i].size(); ++j) {
 
-           binDataWaveform.push_back(dataWaveform[dataPairNameToIndex.at(binPairnames[i][j])]);
+            binDataWaveform.push_back(dataWaveform[dataPairNameToIndex.at(binPairnames[i][j])]);
 
             if (dataBinGcarc[i][j]>=critDist) {
                 binDataWaveform.pop_back();

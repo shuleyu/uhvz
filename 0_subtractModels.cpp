@@ -1,3 +1,17 @@
+
+/**********************************************************************************************************
+ *
+ * Run this code on t039.PREM / t039.ULVZ / t039.UHVZ / t039.Lamella.
+ *
+ * 1. Stack PREM S peaks to get a stack.
+ * 2. Adapt PREM S waveforms to the stack (stretch/shrink).
+ * 3. Stack modified S waveforms to form an S_ESW.
+ * 4. Model by model, use this S_ESW to create ESW-stripped ScS waveforms. (details see the function.)
+ *
+ * This will generate ESW-stripped ScS (*.ScSStripped) for each ScS waveforms, for each model.
+ *
+ **********************************************************************************************************/
+
 #include<iostream>
 #include<vector>
 #include<queue>
@@ -15,16 +29,6 @@
 #include<MariaDB.hpp>
 #include<Float2String.hpp>
 #include<GetHomeDir.hpp>
-
-/**********************************************************************************************************
- *
- * Run this code on t039.PREM or t039.ULVZ or t039.UHVZ -- Use subtraction instead of deconvolution.
- *
- * The source is S stack then modified according to ScS Stack (for each events).
- *
- * This will generate subtracted ScS (*.ScSStripped) and FRSed (*.frs).
- *
- **********************************************************************************************************/
 
 using namespace std;
 
@@ -64,6 +68,7 @@ int main(){
 
     // Update table.
     if (reCreateTable) {
+
         MariaDB::Query("drop table if exists "+outputDB+"."+outputTable);
         MariaDB::Query("create table "+outputDB+"."+outputTable+" (PairName varchar(30) not null unique primary key, EQ varchar(20), Gcarc double, ScSStripped varchar(200), dirPrefix varchar(200))");
     }
@@ -97,7 +102,7 @@ int main(){
 
     /********************************************
     *
-    * 2. Make S ESW stack.
+    * 2. Make S ESW.
     *
     *******************************************/
 
@@ -112,9 +117,12 @@ int main(){
     sESW.HannTaper(20);
 
 
-    // Optional: make S ESW again, this time, stretch/shrink each S to match S ESW, then stack.
+    // stretch/shrink each S waveform to match the stack.
 
     sESWData.StretchToFit(sESW,-13,13,-0.3,0.3,0.25,true); // stretch, then compare waveform Amp_WinDiff.
+
+
+    // make S ESW again.
 
     sESW=sESWData.XCorrStack(0,-15,15,2).second.first;
     sESW.FindPeakAround(0,10);
@@ -124,7 +132,9 @@ int main(){
     sESW.NormalizeToPeak();
     sESW.HannTaper(20);
 
-    // Run the threads.
+
+
+    // Run the threads (for each model ...)
 
     vector<thread> allThreads(nThread);
     for (size_t i=0; i<nThread; ++i) {
@@ -155,15 +165,16 @@ int main(){
 void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
 
 
-    /*************************************************
-    * For each synthetic model...                    *
-    * 1. Read in synthetic S and ScS waveform.       *
-    * 2. Subtract S ESW from S waveform.             *
-    * 3. Modifiy S ESW to match ScS waveforms.       *
-    * 4. Strip modified S ESW from each ScS waveform.*
-    * 5. Output waveforms.                           *
-    * 6. UpdateTables. (Optional)                    *
-    *************************************************/
+    /***************************************************
+     *
+     *  For each model ...
+     *  1. Read in synthetic S and ScS waveform.
+     *  2. Subtract S ESW from S waveform.
+     *  3. (go on) Modifiy S ESW to match ScS waveforms, and strip modified S ESW from each ScS waveform.
+     *  4. Output waveforms.
+     *  5. UpdateTables. (Optional)
+     *
+     **************************************************/
 
     unique_lock<mutex> lck(mtx);
     const string modelName=to_string(201500000000+beginIndex+Index);
@@ -172,9 +183,11 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
     cout << "Processing synthetics: " << modelName << " ... " << endl;
 
 
-    /*************************************
-    * 1. Read in synthetic S waveform.   *
-    *************************************/
+    /************************************************
+     *
+     * 1. Read in synthetic waveform.
+     *
+    ************************************************/
 
     const string modelFolder=synDataDir+"/"+modelName;
 
@@ -183,7 +196,7 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
     Data=SACSignals (ShellExecVec("ls "+modelFolder+"/*.THT.sac"));
     lck.unlock();
 
-    if(Data.Size()!=TraceCnt) throw runtime_error("Reading error: "+modelName);
+    if(Data.Size()!=TraceCnt) throw runtime_error("Reading error: " + modelName);
 
 
     Data.SortByGcarc();
@@ -199,54 +212,53 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
     Data.FlipPeakUp();
     Data.NormalizeToPeak();
 
-    /************************************************
+    /********************************************************
      *
-     * 2. Subtract S waveforms.
+     * 2. Modify S ESW and subtract them from S waveforms.
      *
-    ************************************************/
+    ********************************************************/
 
-    SACSignals beforeSStrip=Data;
+    const SACSignals &beforeSStrip=Data;
 
-    // Properly modify the S ESW to look like ScS.
+    // Properly modify the S ESW to look like S (the method for the modification is optional).
     vector<EvenSampledSignal> modifiedToFitS;
+
     for (size_t i=0; i<beforeSStrip.Size(); ++i) {
+
         //modifiedToFitS.push_back(sESW.StretchToFit(beforeSStrip.GetData()[i],-13,13,-0.3,0.3,0.25,true)); // stretch, then compare waveform Amp_WinDiff.
         //modifiedToFitScS.push_back(sESW.StretchToFit(beforeSStrip.GetData()[i],-13,13,-0.3,0.3,0.25,true,1)); // stretch, then compare waveform Amp_WinDiff.
         modifiedToFitS.push_back(sESW.StretchToFitHalfWidth(beforeSStrip.GetData()[i])); // stretch to fit the half-width.
     }
 
+    // find the best-fit time shift and subtract modified S_ESW from S waveform.
     auto SXCTimeShift=beforeSStrip.CrossCorrelation(-10,10,modifiedToFitS,-10,10).first;
     auto afterSStrip=beforeSStrip;
     afterSStrip.StripSignal(sESW,SXCTimeShift);
 
-    beforeSStrip.CheckAndCutToWindow(cutBeforeStripT1, cutBeforeStripT2);
 
-
-    /************************************************
+    /********************************************************************************************
      *
-     * 3. Modifiy S ESW to match ScS waveforms.
+     * 3. Modifiy S ESW to match ScS waveforms, and strip modified S ESW from each ScS waveform.
      *
-    ************************************************/
+    ********************************************************************************************/
 
+    // go on.
     SACSignals beforeScSStrip=afterSStrip;
 
 
+    // find and shift ScS peak to zero.
     beforeScSStrip.FindPeakAround(beforeScSStrip.GetTravelTimes("ScS"),10);
     beforeScSStrip.ShiftTimeReferenceToPeak();
     beforeScSStrip.FlipPeakUp();
     beforeScSStrip.NormalizeToPeak();
 
 
-    /************************************************
-     *
-     * 4. Strip modified S ESW from each ScS waveform.
-     *
-    ************************************************/
 
-
-    // Properly modify the S ESW to look like ScS.
+    // Properly modify the S ESW to look like ScS (the method for the modification is optional)..
     vector<EvenSampledSignal> modifiedToFitScS;
+
     for (size_t i=0; i<beforeScSStrip.Size(); ++i) {
+
         //modifiedToFitScS.push_back(sESW.StretchToFit(beforeScSStrip.GetData()[i],-13,13,-0.3,0.3,0.25,true)); // stretch, then compare waveform Amp_WinDiff.
         //modifiedToFitScS.push_back(sESW.StretchToFit(beforeScSStrip.GetData()[i],-13,13,-0.3,0.3,0.25,true,1)); // stretch, then compare waveform Amp_WinDiff.
         modifiedToFitScS.push_back(sESW.StretchToFitHalfWidth(beforeScSStrip.GetData()[i])); // stretch to fit the half-width.
@@ -254,15 +266,20 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
 
 
     // Align at the best cross-correlation fit, before subtraction.
-    // auto ScSXCTimeShift=beforeScSStrip.CrossCorrelation(-10,10,modifiedToFitScS,-10,10).first;
+    // or ...
+    // Align at S ESW peak and ScS peaks before subtraction.
 
-    // Align at peak before subtraction.
+    // auto ScSXCTimeShift=beforeScSStrip.CrossCorrelation(-10,10,modifiedToFitScS,-10,10).first;
     vector<double> ScSXCTimeShift = vector<double> (beforeScSStrip.Size(), 0);
+
+
 
     auto afterScSStrip=beforeScSStrip;
     afterScSStrip.StripSignal(modifiedToFitScS,ScSXCTimeShift);
 
     for (size_t i=0; i<modifiedToFitScS.size(); ++i) {
+
+        // shift time for plotting.
         modifiedToFitScS[i].ShiftTime(ScSXCTimeShift[i]);
     }
 
@@ -275,10 +292,9 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
      *
     ******************/
 
-    // Output Decon waveforms.
+    // Output ScS waveforms (with proper S ESW stripped).
     ShellExec("mkdir -p "+dirPrefix+"/"+modelName);
     afterScSStrip.DumpWaveforms(dirPrefix+"/"+modelName,"StationName","","","ScSStripped");
-
 
 
     // Plot
@@ -323,10 +339,10 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
         string pdffile=__FILE__;
         ShellExec("ps2pdf tmp.ps "+pdffile.substr(0,pdffile.find_last_of("."))+".pdf");
         remove("tmp.ps");
-
     }
 
-    // Finished. Update database and notify the main thread to continue;
+
+    // Will always update database (thread-safe needed).
     lck.lock();
 
     auto stationNames=Data.GetStationNames();
@@ -340,6 +356,7 @@ void processThis(const size_t Index, int mySlot, const EvenSampledSignal &sESW){
         sqlData[4].push_back(dirPrefix);
     }
     MariaDB::LoadData(outputDB,outputTable,vector<string> {"eq", "pairname", "gcarc", "ScSStripped", "dirPrefix"},sqlData);
+
 
     emptySlot.push(mySlot);
     cv.notify_one();
