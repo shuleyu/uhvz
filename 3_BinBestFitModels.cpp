@@ -89,7 +89,7 @@ int main() {
 
         // Find each density category data grid.
         vector<vector<vector<double>>> goodData(rhoDimensions.size()), badData = goodData;
-        vector<int> cnt(rhoDimensions.size(), 0);
+        vector<size_t> cnt(rhoDimensions.size(), 0);
         for (size_t j = 0; j < modelingResult.NRow(); ++j) {
 
             auto properties = modelNameToProperties [ modelingResult.GetString("modelName")[j] ];

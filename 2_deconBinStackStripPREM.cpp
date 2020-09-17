@@ -3,6 +3,8 @@
 #include <queue>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 #include <MariaDB.hpp>
 #include <EvenSampledSignal.hpp>

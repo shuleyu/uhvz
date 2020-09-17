@@ -1,15 +1,17 @@
-#include <iostream>
-#include <map>
-#include <queue>
-#include <thread>
-#include <atomic>
+#include<iostream>
+#include<map>
+#include<queue>
+#include<thread>
+#include<atomic>
+#include<mutex>
+#include<condition_variable>
 
-#include <MariaDB.hpp>
-#include <EvenSampledSignal.hpp>
-#include <ShellExec.hpp>
-#include <PNormErr.hpp>
-#include <RampFunction.hpp>
-#include <GetHomeDir.hpp>
+#include<MariaDB.hpp>
+#include<EvenSampledSignal.hpp>
+#include<ShellExec.hpp>
+#include<PNormErr.hpp>
+#include<RampFunction.hpp>
+#include<GetHomeDir.hpp>
 
 #include "CalculateCQ.hpp"
 

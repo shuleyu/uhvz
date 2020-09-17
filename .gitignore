@@ -1,3 +1,6 @@
 .tmpfile*
 *.pdf
 pdf
+*.d
+*.out
+*.o

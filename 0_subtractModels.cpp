@@ -4,6 +4,8 @@
 #include<thread>
 #include<atomic>
 #include<algorithm>
+#include<mutex>
+#include<condition_variable>
 
 #include<ShellExecVec.hpp>
 #include<ShellExec.hpp>

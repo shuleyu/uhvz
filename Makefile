@@ -3,10 +3,10 @@
 #   If libA.a depends on libB.a, then -lA should appears before -lB.
 
 SACHOME   := /usr/local/sac
-COMP      := c++ -std=c++14 -Wall # -fPIC
+COMP      := c++ -std=c++14 -Wall -Wl,--allow-multiple-definition # -fPIC
 OUTDIR    := .
-INCDIR    := -I. -I$(HOME)/Documents/Research/Fun.C++.c003 -I$(SACHOME)/include -I/usr/local/opt/gmt@5/include
-LIBDIR    := -L. -L$(SACHOME)/lib -L/usr/local/opt/gmt@5/lib
+INCDIR    := -I. -I$(HOME)/Research/Fun.C++.c003 -I$(SACHOME)/include
+LIBDIR    := -L. -L$(SACHOME)/lib
 LIBS      := -lsac -lsacio -lmariadb -lgmt -lfftw3_threads -lfftw3 -lpthread -lm                   
 
 # all *cpp files
